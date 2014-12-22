@@ -806,16 +806,26 @@ int run_iter_bi(struct pingpong_context *ctx,
 int run_iter_uni_server(struct pingpong_context *ctx, 
 						struct perftest_parameters *user_param,int size) {
 
+    fprintf(stdout,"run_iter() called\n");
+
 	int 				rcnt = 0;
 	int 				ne,i;
 	int                 *rcnt_for_qp = NULL;
 	struct ibv_wc 		*wc          = NULL;
 	struct ibv_recv_wr  *bad_wr_recv = NULL;
 
+    int poll_count = 0;
+    int wc_entry_count = 0;
+
 	ALLOCATE(wc,struct ibv_wc,DEF_WC_SIZE);
 	ALLOCATE(rcnt_for_qp,int,user_param->num_of_qps);
 
 	memset(rcnt_for_qp,0,sizeof(int)*user_param->num_of_qps);
+
+
+    fprintf(stdout, "iterations: %d\n", user_param->iters);
+    fprintf(stdout, "use event?: %d\n", user_param->use_event);
+    fprintf(stdout, "rx_depth: %d\n", user_param->rx_depth);
 
 	while (rcnt < user_param->iters) {
 
@@ -828,8 +838,11 @@ int run_iter_uni_server(struct pingpong_context *ctx,
 		
 		do {
 			ne = ibv_poll_cq(ctx->cq,DEF_WC_SIZE,wc);
+            poll_count++;
+
 			if (ne > 0) {
 				for (i = 0; i < ne; i++) {
+                    wc_entry_count++;
 					
 					if (wc[i].status != IBV_WC_SUCCESS) 
 						NOTIFY_COMP_ERROR_RECV(wc[i],rcnt_for_qp[wc[i].wr_id]);
@@ -856,6 +869,9 @@ int run_iter_uni_server(struct pingpong_context *ctx,
 		}
 	}
 
+    fprintf(stdout, "poll count: %d\n", poll_count);
+    fprintf(stdout, "wc entry count: %d\n", wc_entry_count);
+
 	tposted[0] = tcompleted[0];
 	free(wc);
 	free(rcnt_for_qp);
@@ -867,6 +883,9 @@ int run_iter_uni_server(struct pingpong_context *ctx,
  ******************************************************************************/
 int run_iter_uni_client(struct pingpong_context *ctx, 
 						struct perftest_parameters *user_param,int size) {
+
+
+    fprintf(stdout, "run_iter() called\n");
 
 	int 		       ne;
 	int 			   i    = 0;
@@ -884,7 +903,8 @@ int run_iter_uni_client(struct pingpong_context *ctx,
 
 	if (size <= user_param->inline_size) 
 		ctx->wr.send_flags |= IBV_SEND_INLINE; 
-	
+
+    fprintf(stdout, "tx depth: %d\n", user_param->tx_depth);
 
 	while (scnt < user_param->iters || ccnt < user_param->iters) {
 		while (scnt < user_param->iters && (scnt - ccnt) < user_param->tx_depth ) {
@@ -906,6 +926,8 @@ int run_iter_uni_client(struct pingpong_context *ctx,
 			if ((scnt % CQ_MODERATION) == (CQ_MODERATION - 1) || scnt == (user_param->iters - 1)) 
 				ctx->wr.send_flags |= IBV_SEND_SIGNALED;
 		}
+
+        
 
 		if (ccnt < user_param->iters) {	
 			
